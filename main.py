@@ -17,7 +17,7 @@ DOWNLOAD_CHANNEL_ID = os.getenv('DOWNLOAD_CHANNEL_ID')
 DOWNLOAD_CHANNEL_ID = int(DOWNLOAD_CHANNEL_ID) if DOWNLOAD_CHANNEL_ID else None
 
 MUSIC_DIR = './music'
-SUPPORTED_FORMATS = ('.mp3', '.wav', '.flac', '.ogg', '.m4a')
+SUPPORTED_FORMATS = ('.mp3', '.wav', '.flac', '.ogg', '.m4a', '.opus')
 
 intents = discord.Intents.default()
 intents.message_content = True
