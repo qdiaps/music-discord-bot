@@ -1,0 +1,4 @@
+.mypy_cache
+music/
+.venv/
+.env

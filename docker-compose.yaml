@@ -1,0 +1,7 @@
+services:
+  t-music-bot:
+    build: .
+    container_name: t-music-bot
+    restart: unless-stopped
+    volumes:
+      - ./music:/app/music
