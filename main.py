@@ -196,6 +196,9 @@ async def next(ctx):
         if state.playlist:
             state.current_index = (state.current_index + 1) % len(state.playlist)
             state.skip_triggered = True
+            state.is_paused = False
+            if vc.is_paused(): 
+                vc.resume()
             vc.stop()
             await ctx.send(f"Пропуск трека. Следующий:\n{format_song_name(state.get_current_song_name())}")
 
@@ -207,6 +210,9 @@ async def back(ctx):
         if state.playlist:
             state.current_index = (state.current_index - 1) % len(state.playlist)
             state.skip_triggered = True
+            state.is_paused = False
+            if vc.is_paused(): 
+                vc.resume()
             vc.stop()
             await ctx.send(f"Возврат. Сейчас включу:\n{format_song_name(state.get_current_song_name())}")
 
@@ -233,10 +239,13 @@ async def play(ctx, *, target: str):
     if found_idx != -1:
         state.current_index = found_idx
         state.skip_triggered = True
+        state.is_paused = False
         state.save_config()
         
         vc = ctx.voice_client
         if vc:
+            if vc.is_paused(): 
+                vc.resume()
             vc.stop()
         else:
             await start(ctx)
@@ -258,6 +267,9 @@ async def rm(ctx, *, name: str):
                 vc = ctx.voice_client
                 if vc:
                     state.skip_triggered = False
+                    state.is_paused = False
+                    if vc.is_paused(): 
+                        vc.resume()
                     vc.stop()
             
             state.update_playlist()
@@ -296,7 +308,7 @@ async def list(ctx, page: int = 1):
     res = f"Список треков (стр {page}/{pages}):\n```\n"
     for i, name in enumerate(current_page, start=start_idx + 1):
         mark = "▶ " if (i-1) == state.current_index else "  "
-        res += f"{mark}{i:03d}. {name}\n"
+        res += f"{mark}{i}. {name}\n"
     res += "```"
     await ctx.send(res)
 
