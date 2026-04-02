@@ -5,3 +5,4 @@ services:
     restart: unless-stopped
     volumes:
       - ./music:/app/music
+      - ./config.json:/app/config.json
