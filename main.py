@@ -231,11 +231,15 @@ async def play(ctx, *, name: str):
     state.update_playlist()
     if name in state.playlist:
         state.current_index = state.playlist.index(name)
+        
+        state.skip_triggered = True 
+        
         vc = ctx.voice_client
         if vc:
             vc.stop()
         else:
             await start(ctx)
+            
         await ctx.send(f"Включаю выбранный трек:\n{format_song_name(name)}")
     else:
         await ctx.send("Файл не найден. Укажите точное имя с расширением из !list.")
