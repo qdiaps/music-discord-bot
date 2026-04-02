@@ -37,6 +37,7 @@ class MusicState:
         self.repeat_mode = False
         self.download_channel_id = None
         self.last_song_name = None
+        self.skip_triggered = False
         self.load_config()
 
     def load_config(self):
@@ -200,18 +201,23 @@ async def resume(ctx):
 async def next(ctx):
     vc = ctx.voice_client
     if vc:
-        if not state.repeat_mode:
+        state.update_playlist()
+        if state.playlist:
             state.current_index = (state.current_index + 1) % len(state.playlist)
-        vc.stop()
-        await ctx.send("Пропуск трека.")
+            state.skip_triggered = True
+            vc.stop()
+            await ctx.send(f"Пропуск трека. Следующий:\n{format_song_name(state.get_current_song_name())}")
 
 @bot.command()
 async def back(ctx):
     vc = ctx.voice_client
-    if vc and len(state.playlist) > 0:
-        state.current_index = (state.current_index - 1) % len(state.playlist)
-        vc.stop()
-        await ctx.send("Возврат назад.")
+    if vc:
+        state.update_playlist()
+        if state.playlist:
+            state.current_index = (state.current_index - 1) % len(state.playlist)
+            state.skip_triggered = True
+            vc.stop()
+            await ctx.send(f"Возврат. Сейчас включу:\n{format_song_name(state.get_current_song_name())}")
 
 @bot.command()
 async def repeat(ctx):
@@ -273,7 +279,7 @@ async def list(ctx, page: int = 1):
     if not state.playlist:
         return await ctx.send("Плейлист пуст.")
     
-    items_per_page = 20
+    items_per_page = 50
     pages = (len(state.playlist) - 1) // items_per_page + 1
     if page < 1 or page > pages:
         return await ctx.send(f"Страница должна быть от 1 до {pages}.")
@@ -296,28 +302,26 @@ async def radio_loop(vc):
         if not state.playlist:
             return
 
-        if state.current_index >= len(state.playlist):
-            state.current_index = 0
+        if not state.skip_triggered and not state.repeat_mode:
+            pass 
         
-        song_name = state.playlist[state.current_index]
+        state.skip_triggered = False
+
+        song_name = state.get_current_song_name()
         path = os.path.join(MUSIC_DIR, song_name)
         
-        if not os.path.exists(path):
-            state.update_playlist()
-            return
-
         try:
             source = discord.PCMVolumeTransformer(
                 discord.FFmpegPCMAudio(path), 
                 volume=state.volume
             )
-            vc.play(source)
+            def after_playing(error):
+                if not state.repeat_mode and not state.skip_triggered:
+                    state.current_index = (state.current_index + 1) % len(state.playlist)
+                state.skip_triggered = False
+
+            vc.play(source, after=after_playing)
             await bot.change_presence(activity=discord.Game(name=song_name))
-            state.save_config()
-            
-            if not state.repeat_mode:
-                state.current_index = (state.current_index + 1) % len(state.playlist)
-                
         except Exception as e:
             logger.error(f"Ошибка воспроизведения: {e}")
             state.current_index = (state.current_index + 1) % len(state.playlist)
