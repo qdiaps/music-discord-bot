@@ -85,8 +85,7 @@ def format_song_name(name):
 @bot.event
 async def on_ready():
     state.update_playlist()
-    if state.last_song_name in state.playlist:
-        state.current_index = state.playlist.index(state.last_song_name)
+    state.current_index = 0
     logger.info(f"Бот авторизован как {bot.user}")
 
 @bot.event
