@@ -36,7 +36,6 @@ class MusicState:
         self.is_paused = False
         self.repeat_mode = False
         self.download_channel_id = None
-        self.last_song_name = None
         self.skip_triggered = False
         self.load_config()
 
@@ -47,7 +46,6 @@ class MusicState:
                     data = json.load(f)
                     self.volume = data.get('volume', 0.5)
                     self.download_channel_id = data.get('download_channel_id')
-                    self.last_song_name = data.get('last_song_name')
                     self.repeat_mode = data.get('repeat_mode', False)
                 logger.info("Конфигурация загружена")
             except Exception as e:
@@ -58,7 +56,6 @@ class MusicState:
             data = {
                 'volume': self.volume,
                 'download_channel_id': self.download_channel_id,
-                'last_song_name': self.get_current_song_name(),
                 'repeat_mode': self.repeat_mode
             }
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
@@ -122,7 +119,7 @@ async def on_message(message):
 async def help(ctx):
     embed = discord.Embed(title="Команды музыкального бота", color=discord.Color.blue())
     cmds = [
-        ("!start", "Запуск плеера (с последней позиции)"),
+        ("!start", "Запуск плеера."),
         ("!stop", "Остановка и выход"),
         ("!pause / !resume", "Пауза / Продолжить"),
         ("!next / !back", "Переключение треков"),
@@ -162,9 +159,6 @@ async def start(ctx):
     state.is_paused = False
     state.update_playlist()
     
-    if state.last_song_name in state.playlist:
-        state.current_index = state.playlist.index(state.last_song_name)
-    
     radio_loop.start(vc)
     await ctx.send(f"Воспроизведение запущено.\n{format_song_name(state.get_current_song_name() or 'Плейлист пуст')}")
 
@@ -175,8 +169,9 @@ async def stop(ctx):
         radio_loop.cancel()
         await vc.disconnect()
         state.is_paused = False
+        state.current_index = 0
         state.save_config()
-        await ctx.send("Воспроизведение остановлено, прогресс сохранен.")
+        await ctx.send("Воспроизведение остановлено.")
 
 @bot.command()
 async def pause(ctx):
