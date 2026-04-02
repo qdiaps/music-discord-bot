@@ -51,31 +51,26 @@ class MusicState:
                     self.repeat_mode = data.get('repeat_mode', False)
                 logger.info("Конфигурация загружена")
             except Exception as e:
-                logger.error(f"Ошибка загрузки конфига: {e}")
+                logger.error(f"Ошибка загрузки конфигурации: {e}")
 
     def save_config(self):
         try:
             data = {
                 'volume': self.volume,
                 'download_channel_id': self.download_channel_id,
-                'last_song_name': self.get_current_song_name() if self.playlist else self.last_song_name,
+                'last_song_name': self.get_current_song_name(),
                 'repeat_mode': self.repeat_mode
             }
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
         except Exception as e:
-            logger.error(f"Ошибка сохранения конфига: {e}")
+            logger.error(f"Ошибка сохранения конфигурации: {e}")
 
     def update_playlist(self):
-        old_song = self.get_current_song_name()
         self.playlist = sorted([
             f for f in os.listdir(MUSIC_DIR) 
             if f.lower().endswith(SUPPORTED_FORMATS)
         ])
-        if old_song in self.playlist:
-            self.current_index = self.playlist.index(old_song)
-        elif self.playlist:
-            self.current_index = self.current_index % len(self.playlist)
 
     def get_current_song_name(self):
         if not self.playlist or self.current_index >= len(self.playlist):
@@ -125,23 +120,21 @@ async def on_message(message):
 
 @bot.command()
 async def help(ctx):
-    embed = discord.Embed(title="Команды бота", color=discord.Color.blue())
-    commands_list = [
-        ("!start", "Запустить плеер"),
-        ("!stop", "Остановить и выйти"),
-        ("!pause", "Пауза"),
-        ("!resume", "Продолжить"),
-        ("!next", "Следующий трек"),
-        ("!back", "Предыдущий трек"),
+    embed = discord.Embed(title="Команды музыкального бота", color=discord.Color.blue())
+    cmds = [
+        ("!start", "Запуск плеера (с последней позиции)"),
+        ("!stop", "Остановка и выход"),
+        ("!pause / !resume", "Пауза / Продолжить"),
+        ("!next / !back", "Переключение треков"),
         ("!repeat", "Вкл/Выкл повтор текущего трека"),
-        ("!play [название]", "Включить конкретный файл"),
-        ("!rm [название]", "Удалить файл"),
-        ("!vol [0-100]", "Громкость"),
-        ("!list [стр]", "Список треков"),
-        ("!set_channel [ID]", "Канал для загрузки")
+        ("!play [имя или №]", "Включить трек по названию или номеру из списка"),
+        ("!rm [имя]", "Удалить файл из библиотеки"),
+        ("!vol [0-100]", "Уровень громкости"),
+        ("!list [стр]", "Просмотр списка файлов"),
+        ("!set_channel [ID]", "Канал для приема файлов")
     ]
-    for cmd, desc in commands_list:
-        embed.add_field(name=cmd, value=desc, inline=False)
+    for n, d in cmds:
+        embed.add_field(name=n, value=d, inline=False)
     
     status = f"Треков: {len(state.playlist)} | Повтор: {'ВКЛ' if state.repeat_mode else 'ВЫКЛ'}"
     embed.set_footer(text=status)
@@ -157,7 +150,7 @@ async def set_channel(ctx, channel_id: int):
 @bot.command()
 async def start(ctx):
     if not ctx.author.voice:
-        return await ctx.send("Ошибка: вы не в голосовом канале.")
+        return await ctx.send("Ошибка: войдите в голосовой канал.")
     
     vc = ctx.voice_client or await ctx.author.voice.channel.connect()
     
@@ -168,6 +161,10 @@ async def start(ctx):
 
     state.is_paused = False
     state.update_playlist()
+    
+    if state.last_song_name in state.playlist:
+        state.current_index = state.playlist.index(state.last_song_name)
+    
     radio_loop.start(vc)
     await ctx.send(f"Воспроизведение запущено.\n{format_song_name(state.get_current_song_name() or 'Плейлист пуст')}")
 
@@ -179,7 +176,7 @@ async def stop(ctx):
         await vc.disconnect()
         state.is_paused = False
         state.save_config()
-        await ctx.send("Воспроизведение остановлено.")
+        await ctx.send("Воспроизведение остановлено, прогресс сохранен.")
 
 @bot.command()
 async def pause(ctx):
@@ -227,45 +224,55 @@ async def repeat(ctx):
     await ctx.send(f"Повтор текущего трека {status}.")
 
 @bot.command()
-async def play(ctx, *, name: str):
+async def play(ctx, *, target: str):
     state.update_playlist()
-    if name in state.playlist:
-        state.current_index = state.playlist.index(name)
-        
-        state.skip_triggered = True 
+    found_idx = -1
+
+    if target.isdigit():
+        idx = int(target) - 1
+        if 0 <= idx < len(state.playlist):
+            found_idx = idx
+    else:
+        if target in state.playlist:
+            found_idx = state.playlist.index(target)
+
+    if found_idx != -1:
+        state.current_index = found_idx
+        state.skip_triggered = True
+        state.save_config()
         
         vc = ctx.voice_client
         if vc:
             vc.stop()
         else:
             await start(ctx)
-            
-        await ctx.send(f"Включаю выбранный трек:\n{format_song_name(name)}")
+        await ctx.send(f"Включаю трек №{found_idx + 1}:\n{format_song_name(state.playlist[found_idx])}")
     else:
-        await ctx.send("Файл не найден. Укажите точное имя с расширением из !list.")
+        await ctx.send("Трек не найден. Укажите точное имя файла или его номер из !list.")
 
 @bot.command()
 async def rm(ctx, *, name: str):
     if name in state.playlist:
         path = os.path.join(MUSIC_DIR, name)
-        current_playing = state.get_current_song_name()
+        is_current = (name == state.get_current_song_name())
         
         try:
             os.remove(path)
             logger.info(f"Файл удален: {name}")
             
-            if name == current_playing:
+            if is_current:
                 vc = ctx.voice_client
                 if vc:
+                    state.skip_triggered = False
                     vc.stop()
             
             state.update_playlist()
-            await ctx.send(f"Удалено успешно: {name}")
+            await ctx.send(f"Файл {name} удален.")
         except Exception as e:
-            logger.error(f"Ошибка при удалении: {e}")
-            await ctx.send("Не удалось удалить файл.")
+            logger.error(f"Ошибка удаления: {e}")
+            await ctx.send("Ошибка при удалении файла.")
     else:
-        await ctx.send("Файл не найден в плейлисте.")
+        await ctx.send("Файл не найден.")
 
 @bot.command()
 async def vol(ctx, volume: int):
@@ -281,21 +288,21 @@ async def vol(ctx, volume: int):
 async def list(ctx, page: int = 1):
     state.update_playlist()
     if not state.playlist:
-        return await ctx.send("Плейлист пуст.")
+        return await ctx.send("Библиотека пуста.")
     
-    items_per_page = 50
-    pages = (len(state.playlist) - 1) // items_per_page + 1
+    ipp = 50
+    pages = (len(state.playlist) - 1) // ipp + 1
     if page < 1 or page > pages:
-        return await ctx.send(f"Страница должна быть от 1 до {pages}.")
+        return await ctx.send(f"Страница {page} не существует. Всего страниц: {pages}")
     
-    start_idx = (page - 1) * items_per_page
-    end_idx = start_idx + items_per_page
+    start_idx = (page - 1) * ipp
+    end_idx = start_idx + ipp
     current_page = state.playlist[start_idx:end_idx]
     
-    res = f"Треки (стр {page}/{pages}):\n```\n"
+    res = f"Список треков (стр {page}/{pages}):\n```\n"
     for i, name in enumerate(current_page, start=start_idx + 1):
-        prefix = "▶ " if (i-1) == state.current_index else "  "
-        res += f"{prefix}{i}. {name}\n"
+        mark = "▶ " if (i-1) == state.current_index else "  "
+        res += f"{mark}{i:03d}. {name}\n"
     res += "```"
     await ctx.send(res)
 
@@ -306,26 +313,33 @@ async def radio_loop(vc):
         if not state.playlist:
             return
 
-        if not state.skip_triggered and not state.repeat_mode:
-            pass 
-        
-        state.skip_triggered = False
-
-        song_name = state.get_current_song_name()
+        if state.current_index >= len(state.playlist):
+            state.current_index = 0
+            
+        song_name = state.playlist[state.current_index]
         path = os.path.join(MUSIC_DIR, song_name)
         
+        if not os.path.exists(path):
+            state.update_playlist()
+            return
+
         try:
             source = discord.PCMVolumeTransformer(
                 discord.FFmpegPCMAudio(path), 
                 volume=state.volume
             )
-            def after_playing(error):
+            
+            def after_playing(err):
+                if err: 
+                    logger.error(f"Ошибка после трека: {err}")
                 if not state.repeat_mode and not state.skip_triggered:
                     state.current_index = (state.current_index + 1) % len(state.playlist)
                 state.skip_triggered = False
 
             vc.play(source, after=after_playing)
             await bot.change_presence(activity=discord.Game(name=song_name))
+            state.save_config()
+            
         except Exception as e:
             logger.error(f"Ошибка воспроизведения: {e}")
             state.current_index = (state.current_index + 1) % len(state.playlist)
