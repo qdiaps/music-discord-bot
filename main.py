@@ -97,6 +97,17 @@ async def on_ready():
     logger.info(f"Бот авторизован как {bot.user}")
 
 @bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("Ошибка: пропущен обязательный аргумент.")
+        return
+        
+    logger.error(f"Ошибка выполнения команды: {error}")
+
+@bot.event
 async def on_message(message):
     if message.author.bot:
         return
