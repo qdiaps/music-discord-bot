@@ -19,6 +19,7 @@ DOWNLOAD_CHANNEL_ID = os.getenv('DOWNLOAD_CHANNEL_ID')
 DOWNLOAD_CHANNEL_ID = int(DOWNLOAD_CHANNEL_ID) if DOWNLOAD_CHANNEL_ID else None
 
 MUSIC_DIR = './music'
+STATS_FILE = 'stats.json'
 SUPPORTED_FORMATS = ('.mp3', '.wav', '.flac', '.ogg', '.m4a', '.opus')
 
 intents = discord.Intents.default()
@@ -37,7 +38,9 @@ class MusicState:
         self.repeat_mode = False
         self.download_channel_id = None
         self.skip_triggered = False
+        self.stats = {}
         self.load_config()
+        self.load_stats()
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
@@ -73,6 +76,25 @@ class MusicState:
         if not self.playlist or self.current_index >= len(self.playlist):
             return None
         return self.playlist[self.current_index]
+
+    def load_stats(self):
+        if os.path.exists(STATS_FILE):
+            try:
+                with open(STATS_FILE, 'r', encoding='utf-8') as f:
+                    self.stats = json.load(f)
+            except Exception as e:
+                logger.error(f"Ошибка загрузки статистики: {e}")
+
+    def save_stats(self):
+        try:
+            with open(STATS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.stats, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            logger.error(f"Ошибка сохранения статистики: {e}")
+
+    def increment_stat(self, song_name):
+        self.stats[song_name] = self.stats.get(song_name, 0) + 1
+        self.save_stats()
 
 state = MusicState()
 
@@ -118,7 +140,7 @@ async def on_message(message):
 async def help(ctx):
     embed = discord.Embed(title="Команды музыкального бота", color=discord.Color.blue())
     cmds = [
-        ("!start", "Запуск плеера."),
+        ("!start", "Запуск плеера"),
         ("!stop", "Остановка и выход"),
         ("!pause / !resume", "Пауза / Продолжить"),
         ("!next / !back", "Переключение треков"),
@@ -127,7 +149,8 @@ async def help(ctx):
         ("!rm [имя]", "Удалить файл из библиотеки"),
         ("!vol [0-100]", "Уровень громкости"),
         ("!list [стр]", "Просмотр списка файлов"),
-        ("!set_channel [ID]", "Канал для приема файлов")
+        ("!set_channel [ID]", "Канал для приема файлов"),
+        ("!top [кол-во]", "Топ самых прослушиваемых треков")
     ]
     for n, d in cmds:
         embed.add_field(name=n, value=d, inline=False)
@@ -312,6 +335,19 @@ async def list(ctx, page: int = 1):
     res += "```"
     await ctx.send(res)
 
+@bot.command()
+async def top(ctx, limit: int = 10):
+    if not state.stats:
+        return await ctx.send("Статистика пуста.")
+    
+    sorted_stats = sorted(state.stats.items(), key=lambda item: item[1], reverse=True)[:limit]
+    
+    res = f"Топ {limit} треков:\n```\n"
+    for i, (name, count) in enumerate(sorted_stats, 1):
+        res += f"{i}. {name} — {count} раз(а)\n"
+    res += "```"
+    await ctx.send(res)
+
 @tasks.loop(seconds=1)
 async def radio_loop(vc):
     if not vc.is_playing() and not state.is_paused:
@@ -343,6 +379,7 @@ async def radio_loop(vc):
                 state.skip_triggered = False
 
             vc.play(source, after=after_playing)
+            state.increment_stat(song_name)
             await bot.change_presence(activity=discord.Game(name=song_name))
             state.save_config()
             

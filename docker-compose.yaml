@@ -6,3 +6,4 @@ services:
     volumes:
       - ./music:/app/music
       - ./config.json:/app/config.json
+      - ./stats.json:/app/stats.json
