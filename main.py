@@ -140,15 +140,15 @@ async def on_message(message):
 async def help(ctx):
     embed = discord.Embed(title="Команды музыкального бота", color=discord.Color.blue())
     cmds = [
-        ("!start", "Запуск плеера"),
-        ("!stop", "Остановка и выход"),
+        ("!start (st)", "Запуск плеера"),
+        ("!stop (sp)", "Остановка и выход"),
         ("!pause / !resume", "Пауза / Продолжить"),
-        ("!next / !back", "Переключение треков"),
+        ("!next (n) / !back (b)", "Переключение треков"),
         ("!repeat", "Вкл/Выкл повтор текущего трека"),
-        ("!play [имя или №]", "Включить трек по названию или номеру из списка"),
-        ("!rm [имя]", "Удалить файл из библиотеки"),
-        ("!vol [0-100]", "Уровень громкости"),
-        ("!list [стр]", "Просмотр списка файлов"),
+        ("!play (p) [имя или №]", "Включить трек по названию или номеру из списка"),
+        ("!remove (rm) [имя]", "Удалить файл из библиотеки"),
+        ("!volume [0-100]", "Уровень громкости"),
+        ("!list (l) [стр]", "Просмотр списка файлов"),
         ("!set_channel [ID]", "Канал для приема файлов")
         # ("!top [кол-во]", "Топ самых прослушиваемых треков")
     ]
@@ -166,7 +166,7 @@ async def set_channel(ctx, channel_id: int):
     logger.info(f"Канал загрузки: {channel_id}")
     await ctx.send(f"Канал для загрузки установлен: {channel_id}")
 
-@bot.command()
+@bot.command(aliases=["ыефке", "st", "ые"])
 async def start(ctx):
     if not ctx.author.voice:
         return await ctx.send("Ошибка: войдите в голосовой канал.")
@@ -184,7 +184,7 @@ async def start(ctx):
     radio_loop.start(vc)
     await ctx.send(f"Воспроизведение запущено.\n{format_song_name(state.get_current_song_name() or 'Плейлист пуст')}")
 
-@bot.command()
+@bot.command(aliases=["ыещз", "ыз", "sp"])
 async def stop(ctx):
     vc = ctx.voice_client
     if vc:
@@ -195,7 +195,7 @@ async def stop(ctx):
         state.save_config()
         await ctx.send("Воспроизведение остановлено.")
 
-@bot.command()
+@bot.command(aliases=["зфгыу"])
 async def pause(ctx):
     vc = ctx.voice_client
     if vc and vc.is_playing():
@@ -203,7 +203,7 @@ async def pause(ctx):
         state.is_paused = True
         await ctx.send(f"Пауза.\n{format_song_name(state.get_current_song_name())}")
 
-@bot.command()
+@bot.command(aliases=["куыгьу"])
 async def resume(ctx):
     vc = ctx.voice_client
     if vc and vc.is_paused():
@@ -211,7 +211,7 @@ async def resume(ctx):
         state.is_paused = False
         await ctx.send(f"Возобновлено.\n{format_song_name(state.get_current_song_name())}")
 
-@bot.command()
+@bot.command(aliases=["туче", "т", "n"])
 async def next(ctx):
     vc = ctx.voice_client
     if vc:
@@ -225,7 +225,7 @@ async def next(ctx):
             vc.stop()
             await ctx.send(f"Пропуск трека. Следующий:\n{format_song_name(state.get_current_song_name())}")
 
-@bot.command()
+@bot.command(aliases=["ифсл", "и", "b"])
 async def back(ctx):
     vc = ctx.voice_client
     if vc:
@@ -239,14 +239,14 @@ async def back(ctx):
             vc.stop()
             await ctx.send(f"Возврат. Сейчас включу:\n{format_song_name(state.get_current_song_name())}")
 
-@bot.command()
+@bot.command(aliases=["кузуфе"])
 async def repeat(ctx):
     state.repeat_mode = not state.repeat_mode
     state.save_config()
     status = "включен" if state.repeat_mode else "выключен"
     await ctx.send(f"Повтор текущего трека {status}.")
 
-@bot.command()
+@bot.command(aliases=["здфн", "з", "p"])
 async def play(ctx, *, target: str):
     state.update_playlist()
     found_idx = -1
@@ -276,8 +276,8 @@ async def play(ctx, *, target: str):
     else:
         await ctx.send("Трек не найден. Укажите точное имя файла или его номер из !list.")
 
-@bot.command()
-async def rm(ctx, *, name: str):
+@bot.command(aliases=["куьщму", "кь", "rm"])
+async def remove(ctx, *, name: str):
     if name in state.playlist:
         path = os.path.join(MUSIC_DIR, name)
         is_current = (name == state.get_current_song_name())
@@ -303,8 +303,8 @@ async def rm(ctx, *, name: str):
     else:
         await ctx.send("Файл не найден.")
 
-@bot.command()
-async def vol(ctx, volume: int):
+@bot.command(aliases=["мщдгьу"])
+async def volume(ctx, volume: int):
     if 0 <= volume <= 100:
         state.volume = volume / 100
         state.save_config()
@@ -313,7 +313,7 @@ async def vol(ctx, volume: int):
             vc.source.volume = state.volume
         await ctx.send(f"Громкость установлена на {volume}%")
 
-@bot.command()
+@bot.command(aliases=["дшые", "д", "l"])
 async def list(ctx, page: int = 1):
     state.update_playlist()
     if not state.playlist:
@@ -335,7 +335,7 @@ async def list(ctx, page: int = 1):
     res += "```"
     await ctx.send(res)
 
-@bot.command()
+@bot.command(aliases=["ещз"])
 async def top(ctx, limit: int = 10):
     if not state.stats:
         return await ctx.send("Статистика пуста.")
